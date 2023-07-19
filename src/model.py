@@ -38,10 +38,6 @@ class MyModel(nn.Module):
         return conv_fusion + channel_fusion_2
 
 
-x = torch.randn(100, 4, 2048)  # 输入信号shape：batch_size * 4 * 2048
-print(x.shape)
-net = MyModel()
-y = net(x)  # 通道自注意力网络的输出为 batch_size * 16 * 2048 (通道数增加了）
-print(y.shape)
+
 
 
