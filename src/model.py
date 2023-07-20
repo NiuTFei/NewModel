@@ -12,8 +12,10 @@ class MyModel(nn.Module):
         inter_channels_ = 4  # 输入4通道
         inter_channels = up_channel  # 升到16通道
 
+        # 融合卷积
         self.conv_fusion = ConvFusion()
 
+        # 通道注意力
         self.conv_c1 = nn.Sequential(
             nn.Conv1d(inter_channels_, inter_channels, 1, padding=0, bias=False),
             nn.BatchNorm1d(inter_channels),

@@ -125,3 +125,7 @@ class D_net_gauss(nn.Module):
         x = self.mish(x)
         out = self.lin3(x)
         return out
+
+
+Q = Q_net()
+print(sum(p.numel() for p in Q.parameters()))
