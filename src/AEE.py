@@ -2,11 +2,14 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from src.model import MyModel
+
 
 # 编码器
 class Q_net(nn.Module):
-    def __init__(self, input_dim=1, num_init_features=8, output_dim=1):
+    def __init__(self, input_dim=4, num_init_features=8, output_dim=1):
         super(Q_net, self).__init__()
+        self.attention = MyModel(input_dim=input_dim)
 
         self.feature = nn.Sequential(
             nn.BatchNorm1d(num_init_features * 2),
@@ -37,7 +40,7 @@ class Q_net(nn.Module):
 
     def forward(self, x):
         # x: batch_size * 16 * 2048
-
+        x = self.attention(x)
         x = self.feature(x)  # channel 8
         x = self.conFC1(x)  # channel 500
         x = F.dropout(x)
@@ -60,7 +63,7 @@ class Q_net(nn.Module):
 
 # 解码器
 class P_net(nn.Module):
-    def __init__(self, num_init_features=8, input_dim=1, output_dim=1):
+    def __init__(self, num_init_features=8, input_dim=1, output_dim=4):
         super(P_net, self).__init__()
         self.covFC3 = nn.Conv1d(input_dim, 100, kernel_size=1, stride=1, bias=False)
         self.mishFC3 = nn.Mish(inplace=True)
@@ -70,38 +73,58 @@ class P_net(nn.Module):
         self.mishFC1 = nn.Mish(inplace=True)
         self.feature = nn.Sequential(
             nn.Upsample(scale_factor=2),
-            nn.ConvTranspose1d(num_init_features, num_init_features * 2, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.ConvTranspose1d(num_init_features, num_init_features * 2, kernel_size=3, stride=1, padding=1,
+                               bias=False),
             nn.BatchNorm1d(num_init_features * 2),
             nn.Mish(inplace=True),
-
             nn.Upsample(scale_factor=2),
-            nn.ConvTranspose1d(num_init_features * 2, num_init_features * 2, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.ConvTranspose1d(num_init_features * 2, num_init_features * 2, kernel_size=3, stride=1, padding=1,
+                               bias=False),
             nn.BatchNorm1d(num_init_features * 2),
             nn.Mish(inplace=True),
-
             nn.Upsample(scale_factor=2),
-            nn.ConvTranspose1d(num_init_features * 2, num_init_features * 2, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.ConvTranspose1d(num_init_features * 2, num_init_features * 2, kernel_size=3, stride=1, padding=1,
+                               bias=False),
             nn.BatchNorm1d(num_init_features * 2),
             nn.Mish(inplace=True)
         )
         self.upsample_1 = nn.Upsample(scale_factor=2)
-
+        self.upsample_2 = nn.Upsample(scale_factor=2)
+        self.feature_01 = nn.Sequential(
+            nn.ConvTranspose1d(num_init_features * 2, num_init_features, kernel_size=16, stride=1, padding=15,
+                               dilation=2, output_padding=1),
+            nn.BatchNorm1d(num_init_features),
+            nn.Mish(inplace=True)
+        )
+        self.feature_02 = nn.Sequential(
+            nn.ConvTranspose1d(num_init_features * 2, num_init_features, kernel_size=16, stride=1, padding=7,
+                               bias=False),
+            nn.BatchNorm1d(num_init_features),
+            nn.Mish(inplace=True)
+        )
         self.lastcov = nn.ConvTranspose1d(num_init_features, output_dim, kernel_size=32, stride=1, padding=16,
                                           bias=False)
 
     def forward(self, x):
-        x = self.covFC3(x)      # channel 100
+        x = self.covFC3(x)
         x = F.dropout(x)
         x = self.mishFC3(x)
-        x = self.covFC2(x)      # channel 500
+        x = self.covFC2(x)
         x = F.dropout(x)
         x = self.mishFC2(x)
-        x = self.covFC1(x)      # channel 8
+        x = self.covFC1(x)
         x = F.dropout(x)
         x = self.mishFC1(x)
 
-        x = self.feature(x)     # channel 16
-        signal = self.upsample_1(x)  # channel 16
+        x = self.feature(x)
+        y = self.upsample_1(x)
+        y = self.feature_01(y)
+        z = self.upsample_1(x)
+        z = self.feature_02(z)
+
+        x_ori = torch.add(y, z)
+        x_ori = torch.div(x_ori, 2)
+        signal = self.lastcov(x_ori)
 
         signal_flatten = torch.flatten(signal, 1)
         return signal, signal_flatten
@@ -128,4 +151,10 @@ class D_net_gauss(nn.Module):
 
 
 Q = Q_net()
-print(sum(p.numel() for p in Q.parameters()))
+P = P_net()
+# print(sum(p.numel() for p in Q.parameters()))
+x = torch.randn(100, 4, 2048)
+y, yy = Q(x)
+print(y.shape)
+z, zz = P(y)
+print(z.shape)

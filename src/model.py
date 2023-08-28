@@ -6,14 +6,14 @@ from src.ConvFusion import ConvFusion
 
 
 class MyModel(nn.Module):
-    def __init__(self, up_channel=16):
+    def __init__(self, input_dim=4, up_channel=16):
         super(MyModel, self).__init__()
 
         inter_channels_ = 4  # 输入4通道
         inter_channels = up_channel  # 升到16通道
 
         # 融合卷积
-        self.conv_fusion = ConvFusion()
+        self.conv_fusion = ConvFusion(input_dim=input_dim)
 
         # 通道注意力
         self.conv_c1 = nn.Sequential(
